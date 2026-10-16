@@ -1,0 +1,147 @@
+@startuml
+title SoilGuard Field Sensor Unit - Class Diagram
+skinparam classAttributeIconSize 0
+
+package "ModestIoT Framework" {
+    abstract class Device {
+        +begin(): bool
+        +update(): void
+        +on(event: Event): void
+        +handleCommand(command: Command): void
+    }
+
+    abstract class Sensor {
+        #pin: uint8_t
+        +begin(): bool
+        +readValue(): float
+        +createEvent(): Event
+    }
+
+    abstract class Actuator {
+        #pin: uint8_t
+        +begin(): bool
+        +handle(command: Command): void
+    }
+
+    class Event {
+        +identifier: String
+        +value: float
+        +timestampMs: unsigned long
+    }
+
+    class Command {
+        +identifier: String
+        +value: float
+    }
+
+    class EventHandler {
+        +dispatch(event: Event): void
+    }
+
+    class CommandHandler {
+        +dispatch(command: Command): void
+    }
+}
+
+package "SoilGuard Embedded Application" {
+    class SoilGuardFieldSensorUnit {
+        -moistureThresholdPercent: float
+        -samplingIntervalMs: unsigned long
+        -lastSampleMs: unsigned long
+        +begin(): bool
+        +update(): void
+        +on(event: Event): void
+        +handleCommand(command: Command): void
+        -evaluateSoilCondition(): void
+        -requestIrrigation(): void
+    }
+
+    class SoilMoistureSensor {
+        -dryCalibration: int
+        -wetCalibration: int
+        -lastMoisturePercent: float
+        +readMoisturePercent(): float
+        +createEvent(): Event
+    }
+
+    class SoilTemperatureSensor {
+        -lastTemperatureCelsius: float
+        +readTemperatureCelsius(): float
+        +createEvent(): Event
+    }
+
+    class IrrigationValve {
+        -isOpen: bool
+        +open(): void
+        +close(): void
+        +handle(command: Command): void
+    }
+}
+
+SoilGuardFieldSensorUnit --|> Device
+SoilMoistureSensor --|> Sensor
+SoilTemperatureSensor --|> Sensor
+IrrigationValve --|> Actuator
+
+SoilGuardFieldSensorUnit *-- "1" SoilMoistureSensor : owns
+SoilGuardFieldSensorUnit *-- "1" SoilTemperatureSensor : owns
+SoilGuardFieldSensorUnit *-- "1" IrrigationValve : owns
+
+SoilGuardFieldSensorUnit --> EventHandler : processes events
+SoilGuardFieldSensorUnit --> CommandHandler : routes commands
+SoilMoistureSensor ..> Event : emits
+SoilTemperatureSensor ..> Event : emits
+CommandHandler --> IrrigationValve : dispatches command
+IrrigationValve ..> Command : handles
+
+
+workspace "SoilGuard" "Diagrama C4 de contenedores" {
+
+    !identifiers hierarchical
+
+    model {
+        agricultor = person "Agricultor" "Supervisa el cultivo y recibe alertas."
+        agronomo = person "Agrónomo" "Revisa las mediciones y las condiciones del cultivo."
+        tecnico = person "Técnico de campo" "Instala, revisa y mantiene los nodos."
+        administrador = person "Administrador" "Gestiona usuarios, parcelas y dispositivos."
+
+        soilGuard = softwareSystem "SoilGuard" "Solución IoT para monitorear el suelo y apoyar el riego." {
+
+            appMovil = container "SoilGuard App" "Permite al agricultor consultar mediciones, alertas y estado del riego." "Aplicación móvil"
+            dashboard = container "Dashboard de monitoreo" "Permite revisar parcelas, mediciones e historial." "Aplicación web"
+            herramientaCampo = container "Field Service Tool" "Permite al técnico revisar y diagnosticar los nodos." "Aplicación móvil/web"
+            consolaAdmin = container "SoilGuard Admin Console" "Permite administrar usuarios, parcelas y dispositivos." "Aplicación web"
+
+            firmware = container "Firmware del nodo de campo" "Lee los sensores de suelo y controla el actuador de riego. Se ejecuta en el microcontrolador del nodo." "C++ / ESP32"
+            gateway = container "IoT Gateway" "Recibe la telemetría de los nodos y transmite comandos." "MQTT sobre TLS"
+
+            api = container "SoilGuard API" "Entrega datos y servicios a las aplicaciones." "REST / HTTPS"
+            reglas = container "Servicio de análisis y alertas" "Evalúa las mediciones y genera alertas o recomendaciones de riego." "Servicio de procesamiento"
+            baseDatos = container "Base de datos de telemetría" "Almacena mediciones e historial del suelo." "Base de datos de series temporales"
+        }
+
+        agricultor -> soilGuard.appMovil "Consulta el estado del suelo y el riego"
+        agronomo -> soilGuard.dashboard "Revisa mediciones e historial"
+        tecnico -> soilGuard.herramientaCampo "Diagnostica y mantiene los nodos"
+        administrador -> soilGuard.consolaAdmin "Gestiona usuarios, parcelas y dispositivos"
+
+        soilGuard.appMovil -> soilGuard.api "Consulta mediciones y alertas" "REST / HTTPS"
+        soilGuard.dashboard -> soilGuard.api "Consulta parcelas e historial" "REST / HTTPS"
+        soilGuard.herramientaCampo -> soilGuard.api "Consulta el estado de los nodos" "REST / HTTPS"
+        soilGuard.consolaAdmin -> soilGuard.api "Administra la solución" "REST / HTTPS"
+
+        soilGuard.firmware -> soilGuard.gateway "Envía mediciones y recibe comandos" "MQTT sobre TLS"
+        soilGuard.gateway -> soilGuard.reglas "Envía telemetría para su evaluación"
+        soilGuard.reglas -> soilGuard.baseDatos "Guarda mediciones y resultados"
+        soilGuard.api -> soilGuard.baseDatos "Consulta mediciones e historial"
+        soilGuard.reglas -> soilGuard.api "Publica alertas y recomendaciones"
+    }
+
+    views {
+        container soilGuard "SoilGuardContainers" {
+            include *
+            autoLayout lr
+        }
+    }
+}
+@enduml
